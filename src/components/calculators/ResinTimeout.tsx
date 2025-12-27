@@ -3,11 +3,8 @@ import { Timer, RotateCcw, ChevronDown, ChevronRight, RefreshCw } from "lucide-r
 import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card";
 import { NumberInput } from "../ui/NumberInput";
 import { LINE_PROFILES } from "../../data/lineProfiles";
+import { getLayerHopperCapacities, type HopperCapacity } from "../../data/hopperCapacities";
 import { calculatePoundsPerHour, calculateHopperPPH } from "../../utils/formulas";
-
-// Hopper capacities
-const MAIN_HOPPER_CAPACITY = 50; // lbs
-const ADDITIVE_HOPPER_CAPACITY = 25; // lbs
 
 interface HopperState {
   id: string;
@@ -49,21 +46,24 @@ interface HopperResult {
   timeBeforeChangeover: number; // minutes before changeover
 }
 
-const createDefaultHoppers = (layerId: string): HopperState[] => [
-  { id: "main", name: `${layerId} Main`, type: "main", usagePercent: 50, capacity: MAIN_HOPPER_CAPACITY },
-  { id: "add1", name: `${layerId}1`, type: "additive", usagePercent: 15, capacity: ADDITIVE_HOPPER_CAPACITY },
-  { id: "add2", name: `${layerId}2`, type: "additive", usagePercent: 15, capacity: ADDITIVE_HOPPER_CAPACITY },
-  { id: "add3", name: `${layerId}3`, type: "additive", usagePercent: 10, capacity: ADDITIVE_HOPPER_CAPACITY },
-  { id: "add4", name: `${layerId}4`, type: "additive", usagePercent: 7, capacity: ADDITIVE_HOPPER_CAPACITY },
-  { id: "add5", name: `${layerId}5`, type: "additive", usagePercent: 3, capacity: ADDITIVE_HOPPER_CAPACITY },
-];
+const createDefaultHoppers = (lineId: string, layerId: string): HopperState[] => {
+  const capacities: HopperCapacity = getLayerHopperCapacities(lineId, layerId);
 
-const createLayersForLine = (layerLabels: string[]): LayerState[] => {
+  return [
+    { id: "main", name: `${layerId}M`, type: "main", usagePercent: 50, capacity: capacities.main },
+    { id: "add1", name: `${layerId}1`, type: "additive", usagePercent: 20, capacity: capacities.add1 },
+    { id: "add2", name: `${layerId}2`, type: "additive", usagePercent: 15, capacity: capacities.add2 },
+    { id: "add3", name: `${layerId}3`, type: "additive", usagePercent: 10, capacity: capacities.add3 },
+    { id: "add4", name: `${layerId}4`, type: "additive", usagePercent: 5, capacity: capacities.add4 },
+  ];
+};
+
+const createLayersForLine = (lineId: string, layerLabels: string[]): LayerState[] => {
   const equalBlend = 100 / layerLabels.length;
   return layerLabels.map((label, index) => ({
     id: label,
     blendPercent: Math.round(equalBlend * 10) / 10,
-    hoppers: createDefaultHoppers(label),
+    hoppers: createDefaultHoppers(lineId, label),
     isExpanded: index === 0,
   }));
 };
@@ -139,7 +139,7 @@ export function ResinTimeout() {
     const line = LINE_PROFILES.find((l) => l.id === lineId);
     if (line) {
       setSelectedLineId(lineId);
-      setLayers(createLayersForLine(line.layerLabels));
+      setLayers(createLayersForLine(lineId, line.layerLabels));
     }
   };
 
@@ -312,7 +312,7 @@ export function ResinTimeout() {
       if (!resultsByLayer[result.layerId]) {
         resultsByLayer[result.layerId] = [];
       }
-      resultsByLayer[result.layerId]!.push(result);
+      resultsByLayer[result.layerId]?.push(result);
     });
 
     // Calculate time from now
@@ -333,12 +333,34 @@ export function ResinTimeout() {
     };
   }, [lineInputs, jobInputs, layers]);
 
+  // Get capacity summary for selected line
+  const getCapacitySummary = () => {
+    if (!selectedLineId || layers.length === 0) return null;
+
+    const firstLayer = layers[0];
+    if (!firstLayer) return null;
+
+    const mainHopper = firstLayer.hoppers.find(h => h.type === "main");
+    const additiveHoppers = firstLayer.hoppers.filter(h => h.type === "additive");
+
+    // Check if all additives have same capacity
+    const uniqueAdditiveCapacities = [...new Set(additiveHoppers.map(h => h.capacity))];
+
+    return {
+      mainCapacity: mainHopper?.capacity ?? 0,
+      additiveCapacities: uniqueAdditiveCapacities,
+      isUniform: uniqueAdditiveCapacities.length === 1,
+    };
+  };
+
+  const capacitySummary = getCapacitySummary();
+
   return (
     <div className="mx-auto max-w-4xl">
       <Card>
         <CardHeader
           title="Resin Timeout Calculator"
-          subtitle="Calculate when to shut off each hopper for changeover (v2)"
+          subtitle="Calculate when to shut off each hopper for changeover"
         />
 
         <CardBody className="space-y-6">
@@ -464,9 +486,14 @@ export function ResinTimeout() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium text-slate-300">Layer Configuration</h3>
-                  <div className="text-xs text-slate-500">
-                    Main: {MAIN_HOPPER_CAPACITY} lbs | Additives: {ADDITIVE_HOPPER_CAPACITY} lbs
-                  </div>
+                  {capacitySummary && (
+                    <div className="text-xs text-slate-500">
+                      {selectedLine.name}: Main {capacitySummary.mainCapacity} lbs |{" "}
+                      {capacitySummary.isUniform
+                        ? `Additives ${capacitySummary.additiveCapacities[0]} lbs`
+                        : `Additives vary`}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {layers.map((layer) => (
@@ -489,7 +516,7 @@ export function ResinTimeout() {
                           </span>
                         </div>
                         <div className="text-sm text-slate-400">
-                          6 hoppers
+                          5 hoppers
                         </div>
                       </button>
 
@@ -660,21 +687,22 @@ export function ResinTimeout() {
       </div>
 
       {/* Hopper Capacities Reference */}
-      <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-        <h3 className="mb-2 text-sm font-medium text-slate-300">Hopper Capacities</h3>
-        <div className="text-sm text-slate-400 grid grid-cols-2 gap-4">
-          <div>
-            <p className="font-medium text-slate-300">Main Hoppers</p>
-            <p>{MAIN_HOPPER_CAPACITY} lbs capacity</p>
-            <p>10% reserve = {MAIN_HOPPER_CAPACITY * 0.1} lbs</p>
-          </div>
-          <div>
-            <p className="font-medium text-slate-300">Additive Hoppers</p>
-            <p>{ADDITIVE_HOPPER_CAPACITY} lbs capacity</p>
-            <p>10% reserve = {ADDITIVE_HOPPER_CAPACITY * 0.1} lbs</p>
+      {selectedLine && capacitySummary && (
+        <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+          <h3 className="mb-2 text-sm font-medium text-slate-300">Hopper Capacities - {selectedLine.name}</h3>
+          <div className="text-sm text-slate-400">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {layers[0]?.hoppers.map((hopper) => (
+                <div key={hopper.id}>
+                  <p className="font-medium text-slate-300">{hopper.name}</p>
+                  <p>{hopper.capacity} lbs capacity</p>
+                  <p className="text-xs">10% reserve = {(hopper.capacity * 0.1).toFixed(0)} lbs</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
