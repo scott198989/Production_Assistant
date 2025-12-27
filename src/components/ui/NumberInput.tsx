@@ -54,16 +54,19 @@ export function NumberInput({
         return;
       }
 
-      // Allow decimal point
-      if (inputValue === "." || inputValue === "-.") {
+      // Allow decimal point and partial decimal inputs
+      if (inputValue === "." || inputValue === "-." || inputValue.endsWith(".")) {
         onChange(inputValue);
         return;
       }
 
-      // Parse as number
-      const numValue = parseFloat(inputValue);
-      if (!isNaN(numValue)) {
-        onChange(numValue);
+      // Allow valid numeric patterns including intermediate typing states
+      // This regex allows: integers, decimals, and numbers being typed
+      const validPattern = /^-?\d*\.?\d*$/;
+      if (validPattern.test(inputValue)) {
+        // Keep as string to preserve user's input while typing
+        // This allows typing "40" without it being converted to "4" first
+        onChange(inputValue);
       }
     },
     [onChange]
@@ -132,6 +135,7 @@ export function NumberInput({
             onFocus={handleFocus}
             placeholder={placeholder}
             disabled={disabled}
+            autoComplete="off"
             className={`input-base ${showSteppers ? "rounded-none" : ""} ${
               hasError
                 ? "border-danger focus:border-danger focus:ring-danger/20"
