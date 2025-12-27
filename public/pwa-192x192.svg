@@ -1,0 +1,7 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="24" fill="#0f172a"/>
+  <rect x="8" y="8" width="176" height="176" rx="20" fill="#1e293b"/>
+  <text x="96" y="85" text-anchor="middle" fill="#2563eb" font-family="Inter, system-ui, sans-serif" font-size="42" font-weight="700">ISO</text>
+  <text x="96" y="125" text-anchor="middle" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="500">Flex</text>
+  <circle cx="96" cy="155" r="8" fill="#22c55e"/>
+</svg>

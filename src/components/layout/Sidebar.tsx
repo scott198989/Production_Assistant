@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Calculator,
@@ -21,6 +21,8 @@ import {
   Package,
   TrendingUp,
   Cog,
+  Menu,
+  X,
 } from "lucide-react";
 
 interface NavItem {
@@ -176,8 +178,19 @@ const navSections: NavSection[] = [
   },
 ];
 
+// Mobile bottom nav items - key sections only
+const mobileNavItems = [
+  { id: "home", label: "Home", path: "/", icon: <Home size={20} /> },
+  { id: "calcs", label: "Calcs", path: "/calculators/roll-weight", icon: <Calculator size={20} /> },
+  { id: "resin", label: "Resin", path: "/tools/resin-timeout", icon: <Timer size={20} /> },
+  { id: "tools", label: "Tools", path: "/tools/unit-converter", icon: <Cog size={20} /> },
+  { id: "settings", label: "Settings", path: "/settings", icon: <Settings size={20} /> },
+];
+
 export function Sidebar() {
   const location = useLocation();
+  const [isMobile, setIsMobile] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >({
@@ -186,6 +199,19 @@ export function Sidebar() {
     quality: false,
     troubleshooting: false,
   });
+
+  // Check if we're on mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Close mobile menu on navigation
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const toggleSection = (sectionId: string) => {
     setExpandedSections((prev) => ({
@@ -198,6 +224,146 @@ export function Sidebar() {
     return section.items.some((item) => location.pathname.startsWith(item.path));
   };
 
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <>
+        {/* Mobile Header Bar */}
+        <div className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-slate-700 bg-slate-800 px-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <Activity className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-bold text-slate-100">ISOFlex</span>
+          </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-700"
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+
+        {/* Mobile Slide-out Menu */}
+        {isMobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+            {/* Menu Panel */}
+            <div className="fixed bottom-16 left-0 right-0 top-14 z-50 overflow-y-auto bg-slate-800">
+              <nav className="p-4">
+                {/* Home Link */}
+                <NavLink
+                  to="/"
+                  className={({ isActive }) =>
+                    `mb-2 flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors ${
+                      isActive
+                        ? "bg-primary text-white"
+                        : "text-slate-300 hover:bg-slate-700 hover:text-slate-100"
+                    }`
+                  }
+                >
+                  <Home size={20} />
+                  Dashboard
+                </NavLink>
+
+                {/* Sections */}
+                {navSections.map((section) => (
+                  <div key={section.id} className="mb-2">
+                    <button
+                      onClick={() => toggleSection(section.id)}
+                      className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-base font-medium transition-colors ${
+                        isActiveSection(section)
+                          ? "text-slate-100"
+                          : "text-slate-400 hover:bg-slate-700 hover:text-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {section.icon}
+                        {section.label}
+                      </div>
+                      {expandedSections[section.id] ? (
+                        <ChevronDown size={18} />
+                      ) : (
+                        <ChevronRight size={18} />
+                      )}
+                    </button>
+
+                    {expandedSections[section.id] && (
+                      <div className="ml-4 mt-1 space-y-1 border-l border-slate-700 pl-4">
+                        {section.items.map((item) => (
+                          <NavLink
+                            key={item.id}
+                            to={item.path}
+                            className={({ isActive }) =>
+                              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-base transition-colors ${
+                                isActive
+                                  ? "bg-primary/10 text-primary"
+                                  : "text-slate-400 hover:bg-slate-700/50 hover:text-slate-300"
+                              }`
+                            }
+                          >
+                            {item.icon}
+                            {item.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Settings */}
+                <div className="mt-4 border-t border-slate-700 pt-4">
+                  <NavLink
+                    to="/settings"
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors ${
+                        isActive
+                          ? "bg-primary text-white"
+                          : "text-slate-400 hover:bg-slate-700 hover:text-slate-300"
+                      }`
+                    }
+                  >
+                    <Settings size={20} />
+                    Settings
+                  </NavLink>
+                </div>
+              </nav>
+            </div>
+          </>
+        )}
+
+        {/* Bottom Navigation Bar */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-700 bg-slate-800 pb-safe">
+          <div className="flex h-16 items-center justify-around">
+            {mobileNavItems.map((item) => {
+              const isActive = item.path === "/"
+                ? location.pathname === "/"
+                : location.pathname.startsWith(item.path.split("/").slice(0, 2).join("/"));
+
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 ${
+                    isActive ? "text-primary" : "text-slate-400"
+                  }`}
+                >
+                  {item.icon}
+                  <span className="text-xs font-medium">{item.label}</span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </nav>
+      </>
+    );
+  }
+
+  // Desktop Layout
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-slate-700 bg-slate-800">
       {/* Logo / App Title */}
