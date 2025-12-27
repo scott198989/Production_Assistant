@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties for Design System */
+:root {
+  /* Primary - Trust/Stability */
+  --color-primary: #2563eb;
+  --color-primary-hover: #3b82f6;
+
+  /* Status Colors - Must be obvious */
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-danger: #ef4444;
+
+  /* Dark theme base (slate palette) */
+  --color-background: #0f172a;
+  --color-background-card: #1e293b;
+  --color-background-elevated: #334155;
+  --color-border: #334155;
+  --color-border-light: #475569;
+
+  /* Text colors */
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+
+  /* Spacing */
+  --touch-target: 48px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+}
+
+/* Focus styles - high visibility for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-light);
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Input styling - large touch targets */
+  .input-base {
+    @apply h-touch w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-lg text-slate-100 transition-colors;
+    @apply hover:border-slate-500 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+
+  .input-base::placeholder {
+    @apply text-slate-500;
+  }
+
+  /* Result display - large and bold */
+  .result-display {
+    @apply text-result font-bold text-slate-100;
+  }
+
+  .result-display-lg {
+    @apply text-result-lg font-bold text-slate-100;
+  }
+
+  /* Card styling */
+  .card {
+    @apply rounded-xl border border-slate-700 bg-slate-800 p-6;
+  }
+
+  .card-header {
+    @apply mb-4 border-b border-slate-700 pb-4;
+  }
+
+  /* Status colors with icon + text */
+  .status-success {
+    @apply text-success;
+  }
+
+  .status-warning {
+    @apply text-warning;
+  }
+
+  .status-danger {
+    @apply text-danger;
+  }
+
+  /* Button base styles */
+  .btn {
+    @apply inline-flex h-touch items-center justify-center gap-2 rounded-lg px-6 font-medium transition-colors;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-hover focus:ring-primary;
+  }
+
+  .btn-secondary {
+    @apply btn border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600 focus:ring-slate-500;
+  }
+
+  .btn-ghost {
+    @apply btn text-slate-400 hover:bg-slate-700 hover:text-slate-200 focus:ring-slate-500;
+  }
+
+  /* Label styling */
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-slate-400;
+  }
+
+  /* Unit indicator */
+  .unit-indicator {
+    @apply text-sm font-medium text-slate-500;
+  }
+}
+
+/* Animation classes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) forwards;
+}
+
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"c:\\\\Users\\\\Scott\\\\Desktop\\\\Production_Assistant\" /s)",
+      "Bash(git -C \"c:\\\\Users\\\\Scott\\\\Desktop\\\\Production_Assistant\" log --oneline)",
+      "Bash(git -C \"c:\\\\Users\\\\Scott\\\\Desktop\\\\Production_Assistant\" show --name-status)",
+      "Bash(npm install)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}
