@@ -5,8 +5,9 @@ import { NumberInput } from "../ui/NumberInput";
 import { CONVERSIONS, type ConversionType } from "../../utils/conversions";
 
 interface ConversionState {
-  fromValue: number | string;
-  toValue: number | string;
+  fromValue: string;
+  toValue: string;
+  lastEdited: "from" | "to" | null;
 }
 
 export function UnitConverter() {
@@ -14,27 +15,60 @@ export function UnitConverter() {
   const [values, setValues] = useState<ConversionState>({
     fromValue: "",
     toValue: "",
+    lastEdited: null,
   });
 
   const currentConversion = CONVERSIONS.find((c) => c.id === activeConversion)!;
 
+  // Format a number for display (result side only)
+  const formatResult = (value: number): string => {
+    if (Math.abs(value) < 0.0001) return value.toExponential(3);
+    if (Math.abs(value) < 0.01) return value.toFixed(6);
+    if (Math.abs(value) < 1) return value.toFixed(4);
+    if (Math.abs(value) < 100) return value.toFixed(3);
+    if (Math.abs(value) < 10000) return value.toFixed(2);
+    return value.toFixed(1);
+  };
+
   const handleFromChange = (value: number | string) => {
-    const numValue = typeof value === "number" ? value : parseFloat(value as string);
-    if (value === "" || isNaN(numValue)) {
-      setValues({ fromValue: value, toValue: "" });
-    } else {
+    const strValue = String(value);
+    const numValue = parseFloat(strValue);
+
+    if (strValue === "" || strValue === "-" || strValue === "." || strValue === "-.") {
+      setValues({ fromValue: strValue, toValue: "", lastEdited: "from" });
+      return;
+    }
+
+    if (!isNaN(numValue)) {
       const converted = currentConversion.convert(numValue);
-      setValues({ fromValue: value, toValue: converted });
+      setValues({
+        fromValue: strValue,
+        toValue: formatResult(converted),
+        lastEdited: "from",
+      });
+    } else {
+      setValues({ fromValue: strValue, toValue: "", lastEdited: "from" });
     }
   };
 
   const handleToChange = (value: number | string) => {
-    const numValue = typeof value === "number" ? value : parseFloat(value as string);
-    if (value === "" || isNaN(numValue)) {
-      setValues({ fromValue: "", toValue: value });
-    } else {
+    const strValue = String(value);
+    const numValue = parseFloat(strValue);
+
+    if (strValue === "" || strValue === "-" || strValue === "." || strValue === "-.") {
+      setValues({ fromValue: "", toValue: strValue, lastEdited: "to" });
+      return;
+    }
+
+    if (!isNaN(numValue)) {
       const converted = currentConversion.reverse(numValue);
-      setValues({ fromValue: converted, toValue: value });
+      setValues({
+        fromValue: formatResult(converted),
+        toValue: strValue,
+        lastEdited: "to",
+      });
+    } else {
+      setValues({ fromValue: "", toValue: strValue, lastEdited: "to" });
     }
   };
 
@@ -42,28 +76,17 @@ export function UnitConverter() {
     setValues((prev) => ({
       fromValue: prev.toValue,
       toValue: prev.fromValue,
+      lastEdited: null,
     }));
   };
 
   const handleConversionChange = (type: ConversionType) => {
     setActiveConversion(type);
-    setValues({ fromValue: "", toValue: "" });
+    setValues({ fromValue: "", toValue: "", lastEdited: null });
   };
 
   const handleReset = () => {
-    setValues({ fromValue: "", toValue: "" });
-  };
-
-  // Format display value
-  const formatValue = (value: number | string): string => {
-    if (value === "" || value === null) return "";
-    const num = typeof value === "number" ? value : parseFloat(value as string);
-    if (isNaN(num)) return "";
-    // Use appropriate precision based on value magnitude
-    if (Math.abs(num) < 0.01) return num.toExponential(2);
-    if (Math.abs(num) < 1) return num.toFixed(4);
-    if (Math.abs(num) < 100) return num.toFixed(2);
-    return num.toFixed(1);
+    setValues({ fromValue: "", toValue: "", lastEdited: null });
   };
 
   return (
@@ -82,6 +105,7 @@ export function UnitConverter() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {CONVERSIONS.map((conv) => (
                   <button
+                    type="button"
                     key={conv.id}
                     onClick={() => handleConversionChange(conv.id)}
                     className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
@@ -104,13 +128,14 @@ export function UnitConverter() {
               <div className="flex-1">
                 <NumberInput
                   label={currentConversion.fromUnit}
-                  value={typeof values.fromValue === "number" ? formatValue(values.fromValue) : values.fromValue}
+                  value={values.fromValue}
                   onChange={handleFromChange}
-                  placeholder="0"
+                  placeholder="Enter value"
                 />
               </div>
 
               <button
+                type="button"
                 onClick={handleSwap}
                 className="mb-1 flex h-touch w-12 items-center justify-center rounded-lg bg-slate-700 text-slate-300 transition-colors hover:bg-slate-600"
                 title="Swap values"
@@ -121,16 +146,16 @@ export function UnitConverter() {
               <div className="flex-1">
                 <NumberInput
                   label={currentConversion.toUnit}
-                  value={typeof values.toValue === "number" ? formatValue(values.toValue) : values.toValue}
+                  value={values.toValue}
                   onChange={handleToChange}
-                  placeholder="0"
+                  placeholder="Enter value"
                 />
               </div>
             </div>
 
             {/* Reset Button */}
             <div className="flex justify-end">
-              <button onClick={handleReset} className="btn-ghost">
+              <button type="button" onClick={handleReset} className="btn-ghost">
                 <RotateCcw size={18} />
                 Clear
               </button>
