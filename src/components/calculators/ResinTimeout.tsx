@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Timer, RotateCcw, ChevronDown, ChevronRight, AlertCircle, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { Timer, RotateCcw, ChevronDown, ChevronRight, AlertCircle, AlertTriangle, CheckCircle } from "lucide-react";
 import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card";
 import { NumberInput } from "../ui/NumberInput";
 import { LINE_PROFILES } from "../../data/lineProfiles";
@@ -38,8 +38,9 @@ interface HopperResult {
   hopperName: string;
   pph: number;
   currentPounds: number;
-  poundsNeeded: number;
+  poundsToConsume: number;
   tenPercentBuffer: number;
+  drainPounds: number;
   shutOffTime: Date | null;
   hoursUntilShutOff: number | null;
   status: "ok" | "warning" | "critical";
@@ -253,16 +254,21 @@ export function ResinTimeout() {
 
         const hopperPPH = calculateHopperPPH(totalPPH, layerBlend, usagePercent);
 
-        // How many pounds this hopper needs for the job
-        const poundsNeeded = hopperPPH * hoursUntilJobEnd;
+        // 10% buffer = 10% of CURRENT hopper contents (what we want left at changeover)
+        const tenPercentBuffer = currentPounds * 0.10;
 
-        // 10% buffer of what's needed (minimum 1 lb)
-        const tenPercentBuffer = Math.max(poundsNeeded * 0.1, 1);
-
-        // Total pounds needed including buffer and drain
-        const poundsWithBuffer = poundsNeeded + tenPercentBuffer;
+        // Drain: material consumed during drain time after hopper shuts off
         const drainPounds = hopperPPH * drainTimeHours;
-        const totalNeeded = poundsWithBuffer + drainPounds;
+
+        // At shut-off time, hopper must have: 10% buffer + drain pounds remaining
+        // So during drain, the drain pounds are consumed, leaving exactly 10%
+        const poundsAtShutOff = tenPercentBuffer + drainPounds;
+
+        // Pounds we can consume from hopper before shutting off
+        const poundsToConsume = currentPounds - poundsAtShutOff;
+
+        // Hours of consumption until shut-off
+        const hoursOfConsumption = poundsToConsume / hopperPPH;
 
         let status: "ok" | "warning" | "critical";
         let message: string;
@@ -272,37 +278,37 @@ export function ResinTimeout() {
         if (currentPounds <= 0) {
           status = "critical";
           message = "Empty - needs refill!";
-        } else if (currentPounds < totalNeeded) {
-          // Not enough to finish job with buffer
+        } else if (poundsToConsume <= 0) {
+          // Not enough material to even start (current is already below what we need at shutoff)
           status = "critical";
-          message = `Need ${(totalNeeded - currentPounds).toFixed(0)} more lbs`;
-        } else {
-          // Calculate shut-off time
-          // We want to leave: 10% buffer + drain time worth of material
-          const poundsToLeave = tenPercentBuffer + drainPounds;
-          const poundsWeCanUse = currentPounds - poundsToLeave;
-          const hoursOfUsage = poundsWeCanUse / hopperPPH;
+          message = `Need ${Math.abs(poundsToConsume).toFixed(0)} more lbs`;
+        } else if (hoursOfConsumption < hoursUntilJobEnd) {
+          // Hopper will run out before job ends - this is normal, calculate shut-off time
+          shutOffTime = new Date(startDateTime.getTime() + hoursOfConsumption * 60 * 60 * 1000);
+          hoursUntilShutOff = hoursOfConsumption;
 
-          shutOffTime = new Date(startDateTime.getTime() + hoursOfUsage * 60 * 60 * 1000);
-          hoursUntilShutOff = hoursOfUsage;
-
-          // Check if shut-off is before job ends (normal)
-          if (shutOffTime <= jobEndTime) {
-            status = "ok";
-            message = `Shut off at ${formatTime(shutOffTime)}`;
-          } else {
-            // Hopper has more than needed - will run until job ends
-            status = "ok";
-            message = `Extra material - runs to end`;
-            shutOffTime = jobEndTime;
-            hoursUntilShutOff = hoursUntilJobEnd;
-          }
-
-          // Warning if shut-off is within 30 minutes
+          // Warning if shut-off is within 30 minutes from now
           const now = new Date();
-          if (shutOffTime && shutOffTime.getTime() - now.getTime() < 30 * 60 * 1000) {
+          const minutesUntilShutOff = (shutOffTime.getTime() - now.getTime()) / (1000 * 60);
+
+          if (minutesUntilShutOff < 0) {
+            status = "critical";
+            message = "Past shut-off time!";
+          } else if (minutesUntilShutOff < 30) {
             status = "warning";
+            message = `Shut off in ${Math.round(minutesUntilShutOff)}min`;
+          } else {
+            status = "ok";
+            message = formatTime(shutOffTime);
           }
+        } else {
+          // Hopper has more than enough - will run until job ends
+          // Shut off at changeover time (or slightly before for drain)
+          const hoursBeforeEnd = drainTimeHours;
+          shutOffTime = new Date(jobEndTime.getTime() - hoursBeforeEnd * 60 * 60 * 1000);
+          hoursUntilShutOff = hoursUntilJobEnd - hoursBeforeEnd;
+          status = "ok";
+          message = `${formatTime(shutOffTime)} (extra material)`;
         }
 
         hopperResults.push({
@@ -311,8 +317,9 @@ export function ResinTimeout() {
           hopperName: hopper.name,
           pph: hopperPPH,
           currentPounds,
-          poundsNeeded,
+          poundsToConsume,
           tenPercentBuffer,
+          drainPounds,
           shutOffTime,
           hoursUntilShutOff,
           status,
@@ -566,26 +573,19 @@ export function ResinTimeout() {
                 </div>
               )}
 
-              {/* Main Results */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {/* Job End Time */}
-                <div className="rounded-lg bg-slate-700 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-primary/20 p-2">
-                      <Clock className="text-primary" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Job Ends</p>
-                      <p className="text-lg font-bold text-slate-100">
-                        {formatTime(timeoutData.jobEndTime)}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {formatDateTime(timeoutData.jobEndTime)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              {/* CHANGEOVER TIME - Main Result */}
+              <div className="rounded-lg bg-primary/20 border-2 border-primary p-6 text-center">
+                <p className="text-sm font-medium text-primary mb-1">Changeover Date/Time</p>
+                <p className="text-3xl font-bold text-slate-100">
+                  {formatDateTime(timeoutData.jobEndTime)}
+                </p>
+                <p className="text-sm text-slate-400 mt-2">
+                  {formatDuration(timeoutData.hoursFromNow)} from now • {timeoutData.remainingPounds.toLocaleString()} lbs @ {timeoutData.totalPPH.toFixed(0)} PPH
+                </p>
+              </div>
 
+              {/* Secondary Stats */}
+              <div className="grid gap-4 sm:grid-cols-2">
                 {/* Time Remaining */}
                 <div className="rounded-lg bg-slate-700 p-4">
                   <div className="flex items-center gap-3">
@@ -593,12 +593,9 @@ export function ResinTimeout() {
                       <Timer className="text-success" size={20} />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400">Time Remaining</p>
+                      <p className="text-xs text-slate-400">Time Until Changeover</p>
                       <p className="text-lg font-bold text-slate-100">
                         {formatDuration(timeoutData.hoursFromNow)}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {timeoutData.remainingPounds.toLocaleString()} lbs @ {timeoutData.totalPPH.toFixed(0)} PPH
                       </p>
                     </div>
                   </div>
@@ -612,7 +609,7 @@ export function ResinTimeout() {
                         <AlertCircle className="text-warning" size={20} />
                       </div>
                       <div>
-                        <p className="text-xs text-slate-400">First Shut-off</p>
+                        <p className="text-xs text-slate-400">First Hopper Shut-off</p>
                         <p className="text-lg font-bold text-warning">
                           {timeoutData.firstShutOff.shutOffTime
                             ? formatTime(timeoutData.firstShutOff.shutOffTime)
@@ -631,17 +628,20 @@ export function ResinTimeout() {
               {/* Hopper Shut-off Schedule */}
               <div>
                 <h4 className="mb-3 text-sm font-medium text-slate-300">Hopper Shut-off Schedule</h4>
-                <div className="rounded-lg border border-slate-700 overflow-hidden">
+                <p className="mb-3 text-xs text-slate-500">
+                  Each hopper will shut off at the time shown, leaving 10% buffer + drain material. At changeover, each hopper will have exactly 10% remaining.
+                </p>
+                <div className="rounded-lg border border-slate-700 overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-800">
                       <tr className="text-left text-slate-400">
-                        <th className="px-4 py-2">Hopper</th>
-                        <th className="px-4 py-2">PPH</th>
-                        <th className="px-4 py-2">Current</th>
-                        <th className="px-4 py-2">Needed</th>
-                        <th className="px-4 py-2">Buffer (10%)</th>
-                        <th className="px-4 py-2">Shut-off Time</th>
-                        <th className="px-4 py-2">Status</th>
+                        <th className="px-4 py-2 whitespace-nowrap">Hopper</th>
+                        <th className="px-4 py-2 whitespace-nowrap">PPH</th>
+                        <th className="px-4 py-2 whitespace-nowrap">Current</th>
+                        <th className="px-4 py-2 whitespace-nowrap">10% Buffer</th>
+                        <th className="px-4 py-2 whitespace-nowrap">Drain</th>
+                        <th className="px-4 py-2 whitespace-nowrap">Shut-off Time</th>
+                        <th className="px-4 py-2 whitespace-nowrap">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
@@ -653,28 +653,25 @@ export function ResinTimeout() {
                             result.status === "warning" ? "bg-warning/10" : ""
                           }`}
                         >
-                          <td className="px-4 py-2 font-medium text-slate-200">
+                          <td className="px-4 py-2 font-medium text-slate-200 whitespace-nowrap">
                             {result.hopperName}
                           </td>
-                          <td className="px-4 py-2 text-slate-400">
+                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
                             {result.pph.toFixed(1)}
                           </td>
-                          <td className="px-4 py-2 text-slate-300">
+                          <td className="px-4 py-2 text-slate-300 whitespace-nowrap">
                             {result.currentPounds.toFixed(0)} lbs
                           </td>
-                          <td className="px-4 py-2 text-slate-400">
-                            {result.poundsNeeded.toFixed(0)} lbs
-                          </td>
-                          <td className="px-4 py-2 text-slate-400">
+                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
                             {result.tenPercentBuffer.toFixed(1)} lbs
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
+                            {result.drainPounds.toFixed(1)} lbs
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
                             {result.shutOffTime ? (
-                              <span className="font-medium text-slate-200">
+                              <span className="font-bold text-lg text-slate-100">
                                 {formatTime(result.shutOffTime)}
-                                <span className="ml-2 text-xs text-slate-500">
-                                  ({formatDuration(result.hoursUntilShutOff ?? 0)})
-                                </span>
                               </span>
                             ) : (
                               <span className="text-slate-500">—</span>
@@ -683,15 +680,15 @@ export function ResinTimeout() {
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-2">
                               {result.status === "ok" && (
-                                <CheckCircle size={16} className="text-success" />
+                                <CheckCircle size={16} className="text-success flex-shrink-0" />
                               )}
                               {result.status === "warning" && (
-                                <AlertCircle size={16} className="text-warning" />
+                                <AlertCircle size={16} className="text-warning flex-shrink-0" />
                               )}
                               {result.status === "critical" && (
-                                <AlertTriangle size={16} className="text-danger" />
+                                <AlertTriangle size={16} className="text-danger flex-shrink-0" />
                               )}
-                              <span className={`text-xs ${
+                              <span className={`text-xs whitespace-nowrap ${
                                 result.status === "ok" ? "text-success" :
                                 result.status === "warning" ? "text-warning" : "text-danger"
                               }`}>
@@ -724,14 +721,21 @@ export function ResinTimeout() {
           How It Works
         </h3>
         <div className="text-sm text-slate-400 space-y-2">
-          <p><strong className="text-slate-300">1. Enter job info:</strong> Remaining pounds on job and current date/time</p>
-          <p><strong className="text-slate-300">2. Set line parameters:</strong> Width, gauge, and speed to calculate output rate</p>
+          <p><strong className="text-slate-300">1. Enter job info:</strong> Remaining pounds on job, date/time, and drain time</p>
+          <p><strong className="text-slate-300">2. Set line parameters:</strong> Width, gauge, and speed to calculate PPH output</p>
           <p><strong className="text-slate-300">3. Configure layers:</strong> Set blend % and hopper usage % for your recipe</p>
           <p><strong className="text-slate-300">4. Enter hopper levels:</strong> Current pounds in each hopper</p>
-          <p className="pt-2 text-slate-500">
-            The calculator determines when to shut off each hopper, leaving a <strong className="text-warning">10% buffer</strong> plus drain time to avoid running empty.
-            Critical alerts show if any hopper needs more material.
-          </p>
+          <div className="pt-2 border-t border-slate-700 mt-3">
+            <p className="font-medium text-slate-300 mb-1">The Result:</p>
+            <p className="text-slate-500">
+              <strong className="text-primary">Changeover time</strong> = when the job ends based on remaining pounds ÷ PPH.
+            </p>
+            <p className="text-slate-500 mt-1">
+              Each hopper's <strong className="text-warning">shut-off time</strong> is calculated so that at changeover,
+              exactly <strong className="text-warning">10% of current hopper contents</strong> remains.
+              The drain time is accounted for—material that flows after shutting off the hopper.
+            </p>
+          </div>
         </div>
       </div>
     </div>
