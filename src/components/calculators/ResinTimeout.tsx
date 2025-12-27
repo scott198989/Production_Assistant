@@ -338,7 +338,7 @@ export function ResinTimeout() {
       <Card>
         <CardHeader
           title="Resin Timeout Calculator"
-          subtitle="Calculate when to shut off each hopper for changeover"
+          subtitle="Calculate when to shut off each hopper for changeover (v2)"
         />
 
         <CardBody className="space-y-6">
