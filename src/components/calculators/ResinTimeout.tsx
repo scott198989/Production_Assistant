@@ -1,15 +1,20 @@
 import { useState, useMemo, useEffect } from "react";
-import { Timer, RotateCcw, ChevronDown, ChevronRight, AlertCircle, AlertTriangle, CheckCircle } from "lucide-react";
+import { Timer, RotateCcw, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card";
 import { NumberInput } from "../ui/NumberInput";
 import { LINE_PROFILES } from "../../data/lineProfiles";
 import { calculatePoundsPerHour, calculateHopperPPH } from "../../utils/formulas";
 
+// Hopper capacities
+const MAIN_HOPPER_CAPACITY = 50; // lbs
+const ADDITIVE_HOPPER_CAPACITY = 25; // lbs
+
 interface HopperState {
   id: string;
   name: string;
+  type: "main" | "additive";
   usagePercent: number | string;
-  poundsRemaining: number | string;
+  capacity: number;
 }
 
 interface LayerState {
@@ -36,24 +41,21 @@ interface HopperResult {
   layerId: string;
   hopperId: string;
   hopperName: string;
+  type: "main" | "additive";
   pph: number;
-  currentPounds: number;
-  poundsToConsume: number;
-  tenPercentBuffer: number;
-  drainPounds: number;
-  shutOffTime: Date | null;
-  hoursUntilShutOff: number | null;
-  status: "ok" | "warning" | "critical";
-  message: string;
+  capacity: number;
+  tenPercentReserve: number;
+  shutOffTime: Date;
+  timeBeforeChangeover: number; // minutes before changeover
 }
 
 const createDefaultHoppers = (layerId: string): HopperState[] => [
-  { id: "main", name: `${layerId} Main`, usagePercent: 50, poundsRemaining: 50 },
-  { id: "add1", name: `${layerId}1`, usagePercent: 15, poundsRemaining: 25 },
-  { id: "add2", name: `${layerId}2`, usagePercent: 15, poundsRemaining: 25 },
-  { id: "add3", name: `${layerId}3`, usagePercent: 10, poundsRemaining: 25 },
-  { id: "add4", name: `${layerId}4`, usagePercent: 7, poundsRemaining: 25 },
-  { id: "add5", name: `${layerId}5`, usagePercent: 3, poundsRemaining: 25 },
+  { id: "main", name: `${layerId} Main`, type: "main", usagePercent: 50, capacity: MAIN_HOPPER_CAPACITY },
+  { id: "add1", name: `${layerId}1`, type: "additive", usagePercent: 15, capacity: ADDITIVE_HOPPER_CAPACITY },
+  { id: "add2", name: `${layerId}2`, type: "additive", usagePercent: 15, capacity: ADDITIVE_HOPPER_CAPACITY },
+  { id: "add3", name: `${layerId}3`, type: "additive", usagePercent: 10, capacity: ADDITIVE_HOPPER_CAPACITY },
+  { id: "add4", name: `${layerId}4`, type: "additive", usagePercent: 7, capacity: ADDITIVE_HOPPER_CAPACITY },
+  { id: "add5", name: `${layerId}5`, type: "additive", usagePercent: 3, capacity: ADDITIVE_HOPPER_CAPACITY },
 ];
 
 const createLayersForLine = (layerLabels: string[]): LayerState[] => {
@@ -90,6 +92,14 @@ const formatDuration = (hours: number): string => {
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+};
+
+const formatMinutes = (minutes: number): string => {
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 };
@@ -160,7 +170,7 @@ export function ResinTimeout() {
   const handleHopperChange = (
     layerId: string,
     hopperId: string,
-    field: "usagePercent" | "poundsRemaining"
+    field: "usagePercent"
   ) => (value: number | string) => {
     setLayers((prev) =>
       prev.map((layer) =>
@@ -225,14 +235,14 @@ export function ResinTimeout() {
 
     const totalPPH = calculatePoundsPerHour(width, gauge, fpm);
 
-    // Calculate job end time
+    // Calculate CHANGEOVER TIME (when job ends)
     const hoursUntilJobEnd = remainingPounds / totalPPH;
-    const jobEndTime = new Date(startDateTime.getTime() + hoursUntilJobEnd * 60 * 60 * 1000);
+    const changeoverTime = new Date(startDateTime.getTime() + hoursUntilJobEnd * 60 * 60 * 1000);
 
     // Drain time in hours
     const drainTimeHours = drainTime / 60;
 
-    // Calculate for each hopper
+    // Calculate for each hopper - WORKING BACKWARDS FROM CHANGEOVER
     const hopperResults: HopperResult[] = [];
 
     layers.forEach((layer) => {
@@ -246,116 +256,80 @@ export function ResinTimeout() {
         const usagePercent = typeof hopper.usagePercent === "number"
           ? hopper.usagePercent
           : parseFloat(hopper.usagePercent as string);
-        const currentPounds = typeof hopper.poundsRemaining === "number"
-          ? hopper.poundsRemaining
-          : parseFloat(hopper.poundsRemaining as string);
 
-        if (isNaN(usagePercent) || isNaN(currentPounds) || usagePercent <= 0) return;
+        if (isNaN(usagePercent) || usagePercent <= 0) return;
 
         const hopperPPH = calculateHopperPPH(totalPPH, layerBlend, usagePercent);
+        const capacity = hopper.capacity;
 
-        // 10% buffer = 10% of CURRENT hopper contents (what we want left at changeover)
-        const tenPercentBuffer = currentPounds * 0.10;
+        // 10% reserve = what we want LEFT at changeover
+        const tenPercentReserve = capacity * 0.10;
 
-        // Drain: material consumed during drain time after hopper shuts off
+        // Drain consumption (material consumed during drain after shut-off)
         const drainPounds = hopperPPH * drainTimeHours;
 
-        // At shut-off time, hopper must have: 10% buffer + drain pounds remaining
-        // So during drain, the drain pounds are consumed, leaving exactly 10%
-        const poundsAtShutOff = tenPercentBuffer + drainPounds;
+        // At shut-off time, hopper needs: 10% reserve + drain amount
+        // So during drain, it consumes drainPounds, leaving exactly 10%
+        const poundsAtShutOff = tenPercentReserve + drainPounds;
 
-        // Pounds we can consume from hopper before shutting off
-        const poundsToConsume = currentPounds - poundsAtShutOff;
+        // From a FULL hopper, how many pounds can we consume before shut-off?
+        const poundsToConsume = capacity - poundsAtShutOff;
 
-        // Hours of consumption until shut-off
-        const hoursOfConsumption = poundsToConsume / hopperPPH;
+        // Time to consume that amount
+        const hoursToConsume = poundsToConsume / hopperPPH;
 
-        let status: "ok" | "warning" | "critical";
-        let message: string;
-        let shutOffTime: Date | null = null;
-        let hoursUntilShutOff: number | null = null;
+        // SHUT-OFF TIME = CHANGEOVER - drain time - consumption time
+        // (We work backwards: changeover minus the time needed)
+        const shutOffTime = new Date(changeoverTime.getTime() - (hoursToConsume + drainTimeHours) * 60 * 60 * 1000);
 
-        if (currentPounds <= 0) {
-          status = "critical";
-          message = "Empty - needs refill!";
-        } else if (poundsToConsume <= 0) {
-          // Not enough material to even start (current is already below what we need at shutoff)
-          status = "critical";
-          message = `Need ${Math.abs(poundsToConsume).toFixed(0)} more lbs`;
-        } else if (hoursOfConsumption < hoursUntilJobEnd) {
-          // Hopper will run out before job ends - this is normal, calculate shut-off time
-          shutOffTime = new Date(startDateTime.getTime() + hoursOfConsumption * 60 * 60 * 1000);
-          hoursUntilShutOff = hoursOfConsumption;
-
-          // Warning if shut-off is within 30 minutes from now
-          const now = new Date();
-          const minutesUntilShutOff = (shutOffTime.getTime() - now.getTime()) / (1000 * 60);
-
-          if (minutesUntilShutOff < 0) {
-            status = "critical";
-            message = "Past shut-off time!";
-          } else if (minutesUntilShutOff < 30) {
-            status = "warning";
-            message = `Shut off in ${Math.round(minutesUntilShutOff)}min`;
-          } else {
-            status = "ok";
-            message = formatTime(shutOffTime);
-          }
-        } else {
-          // Hopper has more than enough - will run until job ends
-          // Shut off at changeover time (or slightly before for drain)
-          const hoursBeforeEnd = drainTimeHours;
-          shutOffTime = new Date(jobEndTime.getTime() - hoursBeforeEnd * 60 * 60 * 1000);
-          hoursUntilShutOff = hoursUntilJobEnd - hoursBeforeEnd;
-          status = "ok";
-          message = `${formatTime(shutOffTime)} (extra material)`;
-        }
+        // How many minutes before changeover is this shut-off?
+        const timeBeforeChangeover = (changeoverTime.getTime() - shutOffTime.getTime()) / (1000 * 60);
 
         hopperResults.push({
           layerId: layer.id,
           hopperId: hopper.id,
           hopperName: hopper.name,
+          type: hopper.type,
           pph: hopperPPH,
-          currentPounds,
-          poundsToConsume,
-          tenPercentBuffer,
-          drainPounds,
+          capacity,
+          tenPercentReserve,
           shutOffTime,
-          hoursUntilShutOff,
-          status,
-          message,
+          timeBeforeChangeover,
         });
       });
     });
 
     if (hopperResults.length === 0) return null;
 
-    // Sort by shut-off time (earliest first), null times at end
-    const sortedResults = [...hopperResults].sort((a, b) => {
-      if (!a.shutOffTime && !b.shutOffTime) return 0;
-      if (!a.shutOffTime) return 1;
-      if (!b.shutOffTime) return -1;
-      return a.shutOffTime.getTime() - b.shutOffTime.getTime();
-    });
+    // Sort by shut-off time (earliest first)
+    const sortedResults = [...hopperResults].sort((a, b) =>
+      a.shutOffTime.getTime() - b.shutOffTime.getTime()
+    );
 
-    // Find first valid shut-off (changeover trigger)
-    const firstShutOff = sortedResults.find((r) => r.shutOffTime && r.status !== "critical");
+    // Group by layer for display
+    const resultsByLayer: Record<string, HopperResult[]> = {};
+    sortedResults.forEach(result => {
+      if (!resultsByLayer[result.layerId]) {
+        resultsByLayer[result.layerId] = [];
+      }
+      resultsByLayer[result.layerId]!.push(result);
+    });
 
     // Calculate time from now
     const now = new Date();
-    const hoursFromNow = (jobEndTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const hoursFromNow = (changeoverTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
     return {
       totalPPH,
       remainingPounds,
       hoursUntilJobEnd,
-      jobEndTime,
+      changeoverTime,
       startDateTime,
       drainTimeMinutes: drainTime,
       hopperResults: sortedResults,
-      firstShutOff,
+      resultsByLayer,
       hoursFromNow,
-      hasIssues: hopperResults.some((r) => r.status === "critical"),
+      firstShutOff: sortedResults[0],
     };
   }, [lineInputs, jobInputs, layers]);
 
@@ -364,8 +338,7 @@ export function ResinTimeout() {
       <Card>
         <CardHeader
           title="Resin Timeout Calculator"
-          subtitle="Calculate material changeover timing with 10% buffer"
-          infoTooltip="Calculates when to shut off each hopper, leaving 10% buffer to avoid running dry"
+          subtitle="Calculate when to shut off each hopper for changeover"
         />
 
         <CardBody className="space-y-6">
@@ -403,7 +376,7 @@ export function ResinTimeout() {
                     onChange={handleJobInputChange("remainingPounds")}
                     unit="lbs"
                     placeholder="8500"
-                    hint="Pounds left to run"
+                    hint="Total pounds left to run"
                   />
                   <div>
                     <label htmlFor="start-date" className="label">Start Date</label>
@@ -443,7 +416,7 @@ export function ResinTimeout() {
                     onChange={handleJobInputChange("drainTimeMinutes")}
                     unit="min"
                     placeholder="15"
-                    hint="Material drain time"
+                    hint="Time for material to drain"
                   />
                 </div>
               </div>
@@ -489,7 +462,12 @@ export function ResinTimeout() {
 
               {/* Layer Configuration */}
               <div>
-                <h3 className="mb-3 text-sm font-medium text-slate-300">Layer Configuration</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-slate-300">Layer Configuration</h3>
+                  <div className="text-xs text-slate-500">
+                    Main: {MAIN_HOPPER_CAPACITY} lbs | Additives: {ADDITIVE_HOPPER_CAPACITY} lbs
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {layers.map((layer) => (
                     <div key={layer.id} className="rounded-lg border border-slate-700 bg-slate-800/50">
@@ -524,28 +502,28 @@ export function ResinTimeout() {
                               value={layer.blendPercent}
                               onChange={handleLayerBlendChange(layer.id)}
                               unit="%"
-                              hint="Percentage of total line output"
+                              hint="Percentage of total line output for this layer"
                             />
                           </div>
 
+                          <p className="text-xs text-slate-500 mb-3">
+                            Hopper usage % within this layer (must total 100%):
+                          </p>
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {layer.hoppers.map((hopper) => (
                               <div key={hopper.id} className="rounded bg-slate-700/50 p-3">
-                                <p className="mb-2 text-sm font-medium text-slate-300">{hopper.name}</p>
-                                <div className="grid gap-2">
-                                  <NumberInput
-                                    label="Usage %"
-                                    value={hopper.usagePercent}
-                                    onChange={handleHopperChange(layer.id, hopper.id, "usagePercent")}
-                                    unit="%"
-                                  />
-                                  <NumberInput
-                                    label="Lbs Remaining"
-                                    value={hopper.poundsRemaining}
-                                    onChange={handleHopperChange(layer.id, hopper.id, "poundsRemaining")}
-                                    unit="lbs"
-                                  />
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-sm font-medium text-slate-300">{hopper.name}</p>
+                                  <span className="text-xs text-slate-500">
+                                    {hopper.capacity} lbs
+                                  </span>
                                 </div>
+                                <NumberInput
+                                  label="Usage %"
+                                  value={hopper.usagePercent}
+                                  onChange={handleHopperChange(layer.id, hopper.id, "usagePercent")}
+                                  unit="%"
+                                />
                               </div>
                             ))}
                           </div>
@@ -561,180 +539,139 @@ export function ResinTimeout() {
 
         {timeoutData && (
           <CardFooter>
-            <div className="space-y-4">
-              {/* Issues Alert */}
-              {timeoutData.hasIssues && (
-                <div className="flex items-center gap-3 rounded-lg bg-danger/20 border border-danger/30 p-4">
-                  <AlertTriangle className="text-danger flex-shrink-0" size={24} />
-                  <div>
-                    <p className="font-medium text-danger">Material Shortage Detected</p>
-                    <p className="text-sm text-slate-300">One or more hoppers don't have enough material to complete the job with 10% buffer.</p>
-                  </div>
-                </div>
-              )}
-
+            <div className="space-y-6">
               {/* CHANGEOVER TIME - Main Result */}
               <div className="rounded-lg bg-primary/20 border-2 border-primary p-6 text-center">
-                <p className="text-sm font-medium text-primary mb-1">Changeover Date/Time</p>
-                <p className="text-3xl font-bold text-slate-100">
-                  {formatDateTime(timeoutData.jobEndTime)}
+                <p className="text-sm font-medium text-primary mb-1">CHANGEOVER TIME</p>
+                <p className="text-4xl font-bold text-slate-100">
+                  {formatDateTime(timeoutData.changeoverTime)}
                 </p>
                 <p className="text-sm text-slate-400 mt-2">
-                  {formatDuration(timeoutData.hoursFromNow)} from now • {timeoutData.remainingPounds.toLocaleString()} lbs @ {timeoutData.totalPPH.toFixed(0)} PPH
+                  {formatDuration(timeoutData.hoursFromNow)} from now
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {timeoutData.remainingPounds.toLocaleString()} lbs @ {timeoutData.totalPPH.toFixed(0)} PPH
                 </p>
               </div>
 
-              {/* Secondary Stats */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                {/* Time Remaining */}
-                <div className="rounded-lg bg-slate-700 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-full bg-success/20 p-2">
-                      <Timer className="text-success" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Time Until Changeover</p>
-                      <p className="text-lg font-bold text-slate-100">
-                        {formatDuration(timeoutData.hoursFromNow)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* First Shut-off */}
-                {timeoutData.firstShutOff && (
-                  <div className="rounded-lg bg-warning/20 border border-warning/30 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-full bg-warning/20 p-2">
-                        <AlertCircle className="text-warning" size={20} />
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400">First Hopper Shut-off</p>
-                        <p className="text-lg font-bold text-warning">
-                          {timeoutData.firstShutOff.shutOffTime
-                            ? formatTime(timeoutData.firstShutOff.shutOffTime)
-                            : "N/A"
-                          }
-                        </p>
-                        <p className="text-xs text-slate-300">
-                          {timeoutData.firstShutOff.hopperName}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Hopper Shut-off Schedule */}
+              {/* Shut-off Schedule by Layer */}
               <div>
-                <h4 className="mb-3 text-sm font-medium text-slate-300">Hopper Shut-off Schedule</h4>
-                <p className="mb-3 text-xs text-slate-500">
-                  Each hopper will shut off at the time shown, leaving 10% buffer + drain material. At changeover, each hopper will have exactly 10% remaining.
+                <h4 className="mb-4 text-lg font-medium text-slate-200">Hopper Shut-off Schedule</h4>
+                <p className="mb-4 text-sm text-slate-500">
+                  Shut off each hopper at the time shown. After the last refill, let each hopper run until its shut-off time.
+                  At changeover, each hopper will have 10% remaining.
                 </p>
-                <div className="rounded-lg border border-slate-700 overflow-hidden overflow-x-auto">
+
+                {Object.entries(timeoutData.resultsByLayer).map(([layerId, hoppers]) => (
+                  <div key={layerId} className="mb-4">
+                    <h5 className="text-sm font-medium text-slate-400 mb-2 flex items-center gap-2">
+                      <span className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-200">
+                        {layerId}
+                      </span>
+                      Layer {layerId}
+                    </h5>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {hoppers.map((result) => (
+                        <div
+                          key={`${result.layerId}-${result.hopperId}`}
+                          className="rounded-lg bg-slate-800 border border-slate-700 p-3"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-slate-200">{result.hopperName}</span>
+                            <span className="text-xs text-slate-500">{result.pph.toFixed(1)} PPH</span>
+                          </div>
+                          <div className="text-center py-2">
+                            <p className="text-xs text-slate-500 mb-1">SHUT OFF AT</p>
+                            <p className="text-2xl font-bold text-warning">
+                              {formatTime(result.shutOffTime)}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {formatMinutes(result.timeBeforeChangeover)} before changeover
+                            </p>
+                          </div>
+                          <div className="flex justify-between text-xs text-slate-500 pt-2 border-t border-slate-700">
+                            <span>Capacity: {result.capacity} lbs</span>
+                            <span>Reserve: {result.tenPercentReserve.toFixed(0)} lbs</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Quick Reference Table */}
+              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                <h5 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+                  <Timer size={16} />
+                  Quick Reference (All Hoppers)
+                </h5>
+                <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-800">
-                      <tr className="text-left text-slate-400">
-                        <th className="px-4 py-2 whitespace-nowrap">Hopper</th>
-                        <th className="px-4 py-2 whitespace-nowrap">PPH</th>
-                        <th className="px-4 py-2 whitespace-nowrap">Current</th>
-                        <th className="px-4 py-2 whitespace-nowrap">10% Buffer</th>
-                        <th className="px-4 py-2 whitespace-nowrap">Drain</th>
-                        <th className="px-4 py-2 whitespace-nowrap">Shut-off Time</th>
-                        <th className="px-4 py-2 whitespace-nowrap">Status</th>
+                    <thead>
+                      <tr className="text-left text-slate-400 border-b border-slate-700">
+                        <th className="pb-2 pr-4">Hopper</th>
+                        <th className="pb-2 pr-4">Shut Off At</th>
+                        <th className="pb-2">Before Changeover</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-700">
+                    <tbody>
                       {timeoutData.hopperResults.map((result) => (
-                        <tr
-                          key={`${result.layerId}-${result.hopperId}`}
-                          className={`${
-                            result.status === "critical" ? "bg-danger/10" :
-                            result.status === "warning" ? "bg-warning/10" : ""
-                          }`}
-                        >
-                          <td className="px-4 py-2 font-medium text-slate-200 whitespace-nowrap">
-                            {result.hopperName}
-                          </td>
-                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
-                            {result.pph.toFixed(1)}
-                          </td>
-                          <td className="px-4 py-2 text-slate-300 whitespace-nowrap">
-                            {result.currentPounds.toFixed(0)} lbs
-                          </td>
-                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
-                            {result.tenPercentBuffer.toFixed(1)} lbs
-                          </td>
-                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
-                            {result.drainPounds.toFixed(1)} lbs
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {result.shutOffTime ? (
-                              <span className="font-bold text-lg text-slate-100">
-                                {formatTime(result.shutOffTime)}
-                              </span>
-                            ) : (
-                              <span className="text-slate-500">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2">
-                            <div className="flex items-center gap-2">
-                              {result.status === "ok" && (
-                                <CheckCircle size={16} className="text-success flex-shrink-0" />
-                              )}
-                              {result.status === "warning" && (
-                                <AlertCircle size={16} className="text-warning flex-shrink-0" />
-                              )}
-                              {result.status === "critical" && (
-                                <AlertTriangle size={16} className="text-danger flex-shrink-0" />
-                              )}
-                              <span className={`text-xs whitespace-nowrap ${
-                                result.status === "ok" ? "text-success" :
-                                result.status === "warning" ? "text-warning" : "text-danger"
-                              }`}>
-                                {result.message}
-                              </span>
-                            </div>
-                          </td>
+                        <tr key={`${result.layerId}-${result.hopperId}`} className="border-b border-slate-700/50">
+                          <td className="py-2 pr-4 font-medium text-slate-200">{result.hopperName}</td>
+                          <td className="py-2 pr-4 font-bold text-warning">{formatTime(result.shutOffTime)}</td>
+                          <td className="py-2 text-slate-400">{formatMinutes(result.timeBeforeChangeover)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-4 flex justify-end">
-              <button type="button" onClick={handleReset} className="btn-ghost">
-                <RotateCcw size={18} />
-                Reset
-              </button>
+              <div className="flex justify-end">
+                <button type="button" onClick={handleReset} className="btn-ghost">
+                  <RotateCcw size={18} />
+                  Reset
+                </button>
+              </div>
             </div>
           </CardFooter>
         )}
       </Card>
 
-      {/* Quick Reference */}
+      {/* How It Works */}
       <div className="mt-6 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
-          <Timer size={16} />
+          <RefreshCw size={16} />
           How It Works
         </h3>
         <div className="text-sm text-slate-400 space-y-2">
-          <p><strong className="text-slate-300">1. Enter job info:</strong> Remaining pounds on job, date/time, and drain time</p>
-          <p><strong className="text-slate-300">2. Set line parameters:</strong> Width, gauge, and speed to calculate PPH output</p>
-          <p><strong className="text-slate-300">3. Configure layers:</strong> Set blend % and hopper usage % for your recipe</p>
-          <p><strong className="text-slate-300">4. Enter hopper levels:</strong> Current pounds in each hopper</p>
-          <div className="pt-2 border-t border-slate-700 mt-3">
-            <p className="font-medium text-slate-300 mb-1">The Result:</p>
-            <p className="text-slate-500">
-              <strong className="text-primary">Changeover time</strong> = when the job ends based on remaining pounds ÷ PPH.
-            </p>
-            <p className="text-slate-500 mt-1">
-              Each hopper's <strong className="text-warning">shut-off time</strong> is calculated so that at changeover,
-              exactly <strong className="text-warning">10% of current hopper contents</strong> remains.
-              The drain time is accounted for—material that flows after shutting off the hopper.
-            </p>
+          <p><strong className="text-slate-300">1.</strong> Select your line and enter the remaining pounds on the job</p>
+          <p><strong className="text-slate-300">2.</strong> Enter line parameters (width, gauge, FPM) to calculate output rate</p>
+          <p><strong className="text-slate-300">3.</strong> Adjust layer blend % and hopper usage % if different from defaults</p>
+          <p><strong className="text-slate-300">4.</strong> The calculator determines:</p>
+          <ul className="ml-6 space-y-1 list-disc">
+            <li><strong className="text-primary">Changeover time</strong> = when the job ends</li>
+            <li><strong className="text-warning">Shut-off time</strong> for each hopper = when to stop that hopper</li>
+            <li>After your <strong>last refill</strong>, let each hopper run until its shut-off time</li>
+            <li>At changeover, each hopper will have <strong>10% remaining</strong> (buffer to avoid running dry)</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Hopper Capacities Reference */}
+      <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+        <h3 className="mb-2 text-sm font-medium text-slate-300">Hopper Capacities</h3>
+        <div className="text-sm text-slate-400 grid grid-cols-2 gap-4">
+          <div>
+            <p className="font-medium text-slate-300">Main Hoppers</p>
+            <p>{MAIN_HOPPER_CAPACITY} lbs capacity</p>
+            <p>10% reserve = {MAIN_HOPPER_CAPACITY * 0.1} lbs</p>
+          </div>
+          <div>
+            <p className="font-medium text-slate-300">Additive Hoppers</p>
+            <p>{ADDITIVE_HOPPER_CAPACITY} lbs capacity</p>
+            <p>10% reserve = {ADDITIVE_HOPPER_CAPACITY * 0.1} lbs</p>
           </div>
         </div>
       </div>
