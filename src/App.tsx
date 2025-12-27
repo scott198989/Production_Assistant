@@ -1,8 +1,15 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { MainPanel } from "./components/layout/MainPanel";
+
+// UI Components
+import { CommandPalette } from "./components/ui/CommandPalette";
+import { Toaster } from "./components/ui/Toaster";
+import { BackgroundEffects } from "./components/ui/BackgroundEffects";
+import { PageTransition } from "./components/ui/PageTransition";
 
 // Pages
 import { Dashboard } from "./pages/Dashboard";
@@ -71,55 +78,68 @@ function App() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-900">
+    <div className="relative flex h-screen w-screen overflow-hidden bg-slate-900">
+      {/* Background Effects */}
+      <BackgroundEffects variant="default" />
+
       {/* Sidebar - handles its own mobile/desktop rendering */}
       <Sidebar />
 
       {/* Main Content Area */}
-      <div className={`flex flex-1 flex-col overflow-hidden ${isMobile ? "w-full" : ""}`}>
+      <div className={`relative z-10 flex flex-1 flex-col overflow-hidden ${isMobile ? "w-full" : ""}`}>
         {/* Header - hide on mobile as Sidebar provides mobile header */}
         {!isMobile && <Header title={pageInfo.title} subtitle={pageInfo.subtitle} />}
 
         {/* Main Panel with Routes */}
         <MainPanel>
-          <Routes>
-            {/* Dashboard */}
-            <Route path="/" element={<Dashboard />} />
+          <AnimatePresence mode="wait">
+            <PageTransition key={location.pathname}>
+              <Routes location={location}>
+                {/* Dashboard */}
+                <Route path="/" element={<Dashboard />} />
 
-            {/* Calculators */}
-            <Route path="/calculators/roll-weight" element={<RollWeight />} />
-            <Route path="/calculators/gram-weight" element={<GramWeight />} />
-            <Route path="/calculators/bag-weight" element={<BagWeight />} />
-            <Route path="/calculators/pph" element={<PoundsPerHour />} />
-            <Route path="/calculators/gauge-adjustment" element={<GaugeAdjustment />} />
-            <Route path="/calculators/bur" element={<BlowUpRatio />} />
-            <Route path="/calculators/ppdi" element={<PoundsPerDieInch />} />
-            <Route path="/calculators/feet-on-roll" element={<FeetOnRoll />} />
-            <Route path="/calculators/line-settings" element={<LineSettings />} />
-            <Route path="/calculators/motor" element={<MotorCalculations />} />
+                {/* Calculators */}
+                <Route path="/calculators/roll-weight" element={<RollWeight />} />
+                <Route path="/calculators/gram-weight" element={<GramWeight />} />
+                <Route path="/calculators/bag-weight" element={<BagWeight />} />
+                <Route path="/calculators/pph" element={<PoundsPerHour />} />
+                <Route path="/calculators/gauge-adjustment" element={<GaugeAdjustment />} />
+                <Route path="/calculators/bur" element={<BlowUpRatio />} />
+                <Route path="/calculators/ppdi" element={<PoundsPerDieInch />} />
+                <Route path="/calculators/feet-on-roll" element={<FeetOnRoll />} />
+                <Route path="/calculators/line-settings" element={<LineSettings />} />
+                <Route path="/calculators/motor" element={<MotorCalculations />} />
 
-            {/* Tools */}
-            <Route path="/tools/resin-timeout" element={<ResinTimeout />} />
-            <Route path="/tools/blade-position" element={<BladePosition />} />
-            <Route path="/tools/unit-converter" element={<UnitConverter />} />
+                {/* Tools */}
+                <Route path="/tools/resin-timeout" element={<ResinTimeout />} />
+                <Route path="/tools/blade-position" element={<BladePosition />} />
+                <Route path="/tools/unit-converter" element={<UnitConverter />} />
 
-            {/* Quality */}
-            <Route path="/quality/treater" element={<TreaterMonitor />} />
-            <Route path="/quality/opacity" element={<OpacityMonitor />} />
-            <Route path="/quality/gloss" element={<GlossMonitor />} />
-            <Route path="/quality/haze" element={<HazeMonitor />} />
+                {/* Quality */}
+                <Route path="/quality/treater" element={<TreaterMonitor />} />
+                <Route path="/quality/opacity" element={<OpacityMonitor />} />
+                <Route path="/quality/gloss" element={<GlossMonitor />} />
+                <Route path="/quality/haze" element={<HazeMonitor />} />
 
-            {/* Troubleshooting - Coming Soon */}
-            <Route path="/troubleshooting/defects" element={<ComingSoon title="Defect Troubleshooter" />} />
+                {/* Troubleshooting - Coming Soon */}
+                <Route path="/troubleshooting/defects" element={<ComingSoon title="Defect Troubleshooter" />} />
 
-            {/* Settings */}
-            <Route path="/settings" element={<Settings />} />
+                {/* Settings */}
+                <Route path="/settings" element={<Settings />} />
 
-            {/* Catch-all */}
-            <Route path="*" element={<ComingSoon title="Page Not Found" />} />
-          </Routes>
+                {/* Catch-all */}
+                <Route path="*" element={<ComingSoon title="Page Not Found" />} />
+              </Routes>
+            </PageTransition>
+          </AnimatePresence>
         </MainPanel>
       </div>
+
+      {/* Command Palette - Global */}
+      <CommandPalette />
+
+      {/* Toast Notifications */}
+      <Toaster />
     </div>
   );
 }
