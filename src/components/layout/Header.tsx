@@ -48,15 +48,15 @@ export function Header({ title, subtitle }: HeaderProps) {
   };
 
   return (
-    <header className="relative z-20 flex h-16 items-center justify-between border-b border-slate-700/50 bg-slate-800/80 px-6 backdrop-blur-xl">
+    <header className="relative z-20 flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-700/50 bg-white/80 dark:bg-slate-800/80 px-6 backdrop-blur-xl">
       {/* Left: Page Title */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-xl font-semibold text-slate-100">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-400">{subtitle}</p>}
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{title}</h1>
+        {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
       </motion.div>
 
       {/* Right: Search, Line Selector & Clock */}
@@ -80,17 +80,17 @@ export function Header({ title, subtitle }: HeaderProps) {
 
         {/* Clock */}
         <motion.div
-          className="flex items-center gap-3 rounded-lg border border-slate-700/30 bg-slate-800/50 px-4 py-2 backdrop-blur-sm"
+          className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700/30 bg-slate-100/50 dark:bg-slate-800/50 px-4 py-2 backdrop-blur-sm"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
           <Clock size={18} className="text-primary/70" />
           <div className="text-right">
-            <div className="text-sm font-medium tabular-nums text-slate-100">
+            <div className="text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">
               {formatTime(currentTime)}
             </div>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
               {formatDate(currentTime)}
             </div>
           </div>

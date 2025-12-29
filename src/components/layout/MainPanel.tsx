@@ -17,7 +17,7 @@ export function MainPanel({ children }: MainPanelProps) {
 
   return (
     <main
-      className={`flex flex-1 flex-col overflow-hidden bg-slate-900 ${
+      className={`flex flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 ${
         isMobile ? "pt-[calc(3.5rem+1rem)] pb-[calc(4rem+1rem)]" : ""
       }`}
     >

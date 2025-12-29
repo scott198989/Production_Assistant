@@ -14,7 +14,16 @@
   --color-warning: #eab308;
   --color-danger: #ef4444;
 
-  /* Dark theme base (slate palette) */
+  /* Spacing */
+  --touch-target: 48px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+}
+
+/* Dark theme (default) */
+.dark {
   --color-background: #0f172a;
   --color-background-card: #1e293b;
   --color-background-elevated: #334155;
@@ -26,16 +35,28 @@
   --color-text-secondary: #94a3b8;
   --color-text-muted: #64748b;
 
-  /* Spacing */
-  --touch-target: 48px;
-
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-normal: 200ms ease;
-
   /* Glass morphism */
   --glass-bg: rgba(30, 41, 59, 0.7);
   --glass-border: rgba(71, 85, 105, 0.4);
+  --glass-blur: 16px;
+}
+
+/* Light theme */
+.light {
+  --color-background: #f8fafc;
+  --color-background-card: #ffffff;
+  --color-background-elevated: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-light: #cbd5e1;
+
+  /* Text colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Glass morphism */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(226, 232, 240, 0.6);
   --glass-blur: 16px;
 }
 
@@ -60,6 +81,16 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light mode specific overrides */
+.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 #root {
@@ -160,17 +191,19 @@ body {
 
   /* Input styling - large touch targets with glass effect */
   .input-base {
-    @apply h-touch w-full rounded-lg px-4 text-lg text-slate-100;
-    @apply bg-slate-800/50 backdrop-blur-sm;
-    @apply border border-slate-600/50;
+    @apply h-touch w-full rounded-lg px-4 text-lg;
+    @apply text-slate-900 dark:text-slate-100;
+    @apply bg-white dark:bg-slate-800/50 backdrop-blur-sm;
+    @apply border border-slate-300 dark:border-slate-600/50;
     @apply transition-all duration-200;
-    @apply hover:border-slate-500/50 hover:bg-slate-800/70;
+    @apply hover:border-slate-400 dark:hover:border-slate-500/50;
+    @apply hover:bg-slate-50 dark:hover:bg-slate-800/70;
     @apply focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
-    @apply focus:bg-slate-800/80;
+    @apply focus:bg-white dark:focus:bg-slate-800/80;
   }
 
   .input-base::placeholder {
-    @apply text-slate-500;
+    @apply text-slate-400 dark:text-slate-500;
   }
 
   /* Result display - large and bold with glow */
@@ -238,7 +271,7 @@ body {
 
   /* Label styling */
   .label {
-    @apply mb-1.5 block text-sm font-medium text-slate-400;
+    @apply mb-1.5 block text-sm font-medium text-slate-600 dark:text-slate-400;
   }
 
   /* Unit indicator */

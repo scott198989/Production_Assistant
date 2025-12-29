@@ -39,11 +39,11 @@ export function GlassCard({
     <motion.div
       className={cn(
         "group relative overflow-hidden rounded-xl",
-        "border border-slate-700/50",
-        "bg-slate-800/50 backdrop-blur-xl",
-        "shadow-xl shadow-black/10",
+        "border border-slate-200 dark:border-slate-700/50",
+        "bg-white/80 dark:bg-slate-800/50 backdrop-blur-xl",
+        "shadow-xl shadow-black/5 dark:shadow-black/10",
         hoverEffect && "transition-all duration-300",
-        hoverEffect && "hover:border-slate-600/50 hover:shadow-2xl hover:shadow-primary/5",
+        hoverEffect && "hover:border-slate-300 dark:hover:border-slate-600/50 hover:shadow-2xl hover:shadow-primary/5",
         className
       )}
       onMouseMove={handleMouseMove}
@@ -82,7 +82,7 @@ interface GlassCardHeaderProps {
 
 export function GlassCardHeader({ title, subtitle, icon, action }: GlassCardHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-slate-700/50 px-6 py-4">
+    <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700/50 px-6 py-4">
       <div className="flex items-center gap-3">
         {icon && (
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -90,9 +90,9 @@ export function GlassCardHeader({ title, subtitle, icon, action }: GlassCardHead
           </div>
         )}
         <div>
-          <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           {subtitle && (
-            <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
           )}
         </div>
       </div>
@@ -107,7 +107,7 @@ export function GlassCardBody({ children, className = "" }: { children: ReactNod
 
 export function GlassCardFooter({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("border-t border-slate-700/50 bg-slate-900/30 px-6 py-4", className)}>
+    <div className={cn("border-t border-slate-200 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-900/30 px-6 py-4", className)}>
       {children}
     </div>
   );

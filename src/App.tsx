@@ -80,7 +80,7 @@ function App() {
   }, []);
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-slate-900">
+    <div className="relative flex h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
       {/* Background Effects */}
       <BackgroundEffects variant="default" />
 

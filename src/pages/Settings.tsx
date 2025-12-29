@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Save, RotateCcw, Download, Upload, Check } from "lucide-react";
+import { Save, RotateCcw, Download, Upload, Check, Sun, Moon, Monitor } from "lucide-react";
 import { Card, CardHeader, CardBody, CardFooter } from "../components/ui/Card";
 import { LINE_PROFILES } from "../data/lineProfiles";
 import { MATERIALS } from "../data/materialPresets";
+import { useTheme } from "../contexts/ThemeContext";
 
 export function Settings() {
+  const { theme, setTheme } = useTheme();
   const [defaultLine, setDefaultLine] = useState<string | null>(null);
   const [defaultMaterial, setDefaultMaterial] = useState<string>("ldpe");
   const [saved, setSaved] = useState(false);
@@ -80,6 +82,49 @@ export function Settings() {
         />
 
         <CardBody className="space-y-6">
+          {/* Theme Selection */}
+          <div>
+            <label className="label">Theme</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTheme("light")}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  theme === "light"
+                    ? "bg-primary text-white"
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                }`}
+              >
+                <Sun size={16} />
+                Light
+              </button>
+              <button
+                onClick={() => setTheme("dark")}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  theme === "dark"
+                    ? "bg-primary text-white"
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                }`}
+              >
+                <Moon size={16} />
+                Dark
+              </button>
+              <button
+                onClick={() => setTheme("system")}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  theme === "system"
+                    ? "bg-primary text-white"
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                }`}
+              >
+                <Monitor size={16} />
+                System
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-500">
+              Choose light or dark mode, or match your system preference
+            </p>
+          </div>
+
           {/* Default Line */}
           <div>
             <label className="label">Default Production Line</label>

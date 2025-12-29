@@ -371,16 +371,16 @@ export function Sidebar() {
 
   // Desktop Layout
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-slate-700 bg-slate-800">
+    <aside className="flex h-screen w-64 flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
       {/* Logo / App Title */}
-      <div className="flex h-16 items-center border-b border-slate-700 px-4">
+      <div className="flex h-16 items-center border-b border-slate-200 dark:border-slate-700 px-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
             <Activity className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-100">ISOFlex</h1>
-            <p className="text-xs text-slate-400">Production Dashboard</p>
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">ISOFlex</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Production Dashboard</p>
           </div>
         </div>
       </div>
@@ -394,7 +394,7 @@ export function Sidebar() {
             `mb-2 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
                 ? "bg-primary text-white"
-                : "text-slate-300 hover:bg-slate-700 hover:text-slate-100"
+                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100"
             }`
           }
         >
@@ -410,8 +410,8 @@ export function Sidebar() {
               onClick={() => toggleSection(section.id)}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActiveSection(section)
-                  ? "text-slate-100"
-                  : "text-slate-400 hover:bg-slate-700 hover:text-slate-300"
+                  ? "text-slate-900 dark:text-slate-100"
+                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -427,7 +427,7 @@ export function Sidebar() {
 
             {/* Section Items */}
             {expandedSections[section.id] && (
-              <div className="ml-3 mt-1 space-y-0.5 border-l border-slate-700 pl-3">
+              <div className="ml-3 mt-1 space-y-0.5 border-l border-slate-200 dark:border-slate-700 pl-3">
                 {section.items.map((item) => (
                   <NavLink
                     key={item.id}
@@ -436,7 +436,7 @@ export function Sidebar() {
                       `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                         isActive
                           ? "bg-primary/10 text-primary"
-                          : "text-slate-400 hover:bg-slate-700/50 hover:text-slate-300"
+                          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-700 dark:hover:text-slate-300"
                       }`
                     }
                   >
@@ -451,14 +451,14 @@ export function Sidebar() {
       </nav>
 
       {/* Settings */}
-      <div className="border-t border-slate-700 p-3">
+      <div className="border-t border-slate-200 dark:border-slate-700 p-3">
         <NavLink
           to="/settings"
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
                 ? "bg-primary text-white"
-                : "text-slate-400 hover:bg-slate-700 hover:text-slate-300"
+                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-300"
             }`
           }
         >
