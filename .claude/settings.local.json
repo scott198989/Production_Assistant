@@ -8,7 +8,9 @@
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
       "Bash(npm install:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUpdate Treater Monitor with wattage and line speed inputs\n\n- Changed inputs from simple \"treater setting\" to actual Wattage, Line Speed, and Film Width\n- Added Watt Density calculation \\(watts per inch per FPM\\) - the key metric for treatment\n- Provides two adjustment options: adjust wattage OR adjust line speed\n- Updated reading history to track watt density\n- Updated help text and examples to explain the relationship\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)"
     ]
   }
 }
