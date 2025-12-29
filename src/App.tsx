@@ -26,6 +26,7 @@ import { PoundsPerDieInch } from "./components/calculators/PoundsPerDieInch";
 import { FeetOnRoll } from "./components/calculators/FeetOnRoll";
 import { LineSettings } from "./components/calculators/LineSettings";
 import { MotorCalculations } from "./components/calculators/MotorCalculations";
+import { TrimScrapCalculator } from "./components/calculators/TrimScrapCalculator";
 
 // Tools
 import { ResinTimeout } from "./components/calculators/ResinTimeout";
@@ -54,6 +55,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
   "/calculators/feet-on-roll": { title: "Feet on Roll", subtitle: "Estimate footage on partial rolls" },
   "/calculators/line-settings": { title: "Line Settings", subtitle: "Calculate new line speed for changes" },
   "/calculators/motor": { title: "Motor Calculations", subtitle: "Calculate motor and screw parameters" },
+  "/calculators/trim-scrap": { title: "Trim Scrap", subtitle: "Calculate edge trim scrap weight" },
   "/tools/resin-timeout": { title: "Resin Timeout", subtitle: "Calculate material changeover timing" },
   "/tools/blade-position": { title: "Blade Position", subtitle: "Calculate blade adjustments" },
   "/tools/unit-converter": { title: "Unit Converter", subtitle: "Convert between common units" },
@@ -109,6 +111,7 @@ function App() {
                 <Route path="/calculators/feet-on-roll" element={<FeetOnRoll />} />
                 <Route path="/calculators/line-settings" element={<LineSettings />} />
                 <Route path="/calculators/motor" element={<MotorCalculations />} />
+                <Route path="/calculators/trim-scrap" element={<TrimScrapCalculator />} />
 
                 {/* Tools */}
                 <Route path="/tools/resin-timeout" element={<ResinTimeout />} />

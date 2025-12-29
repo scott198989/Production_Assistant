@@ -50,6 +50,7 @@ const commandItems: CommandItem[] = [
   { id: "feet-roll", label: "Feet on Roll", path: "/calculators/feet-on-roll", icon: <Ruler size={18} />, category: "Calculators", keywords: ["feet", "footage", "roll"] },
   { id: "line-settings", label: "Line Settings", path: "/calculators/line-settings", icon: <Cog size={18} />, category: "Calculators", keywords: ["line", "speed", "settings"] },
   { id: "motor", label: "Motor Calculations", path: "/calculators/motor", icon: <Cog size={18} />, category: "Calculators", keywords: ["motor", "screw", "rpm"] },
+  { id: "trim-scrap", label: "Trim Scrap Calculator", path: "/calculators/trim-scrap", icon: <Scissors size={18} />, category: "Calculators", keywords: ["trim", "scrap", "waste", "edge", "web"] },
 
   // Tools
   { id: "resin", label: "Resin Timeout", path: "/tools/resin-timeout", icon: <Timer size={18} />, category: "Tools", keywords: ["resin", "timeout", "changeover", "material"] },

@@ -105,6 +105,12 @@ const navSections: NavSection[] = [
         path: "/calculators/motor",
         icon: <Cog size={18} />,
       },
+      {
+        id: "trim-scrap",
+        label: "Trim Scrap",
+        path: "/calculators/trim-scrap",
+        icon: <Scissors size={18} />,
+      },
     ],
   },
   {

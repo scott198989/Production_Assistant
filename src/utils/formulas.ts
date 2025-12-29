@@ -372,6 +372,57 @@ export function calculateShutoffTime(
   return shutoffTime;
 }
 
+// ============================================
+// Trim Scrap Calculations
+// ============================================
+
+/**
+ * Trim Scrap Weight Calculation
+ *
+ * Calculates the weight of edge trim scrap produced during a run.
+ *
+ * Formula: (Trim Width × Gauge × FPM × Run Time in Hours) ÷ 20.3 = Trim Scrap (lbs)
+ *
+ * @param trimWidth - Total trim width in inches (web size - total roll width)
+ * @param gauge - Film thickness in mils
+ * @param fpm - Line speed in feet per minute
+ * @param runTimeHours - Run time in hours (e.g., 12 for a full shift)
+ * @returns Trim scrap weight in pounds
+ */
+export function calculateTrimScrap(
+  trimWidth: number,
+  gauge: number,
+  fpm: number,
+  runTimeHours: number
+): number {
+  if (trimWidth <= 0 || gauge <= 0 || fpm <= 0 || runTimeHours <= 0) {
+    return 0;
+  }
+  // FPM × 60 = feet per hour, then multiply by run time hours
+  return (trimWidth * gauge * fpm * 60 * runTimeHours) / 20.3;
+}
+
+/**
+ * Calculate trim width from web size and rolls
+ *
+ * @param webSize - Total web/bubble width in inches
+ * @param numberOfRolls - Number of rolls being wound
+ * @param rollWidth - Width of each roll in inches
+ * @returns Total trim width in inches
+ */
+export function calculateTrimWidth(
+  webSize: number,
+  numberOfRolls: number,
+  rollWidth: number
+): number {
+  if (webSize <= 0 || numberOfRolls <= 0 || rollWidth <= 0) {
+    return 0;
+  }
+  const totalRollWidth = numberOfRolls * rollWidth;
+  const trimWidth = webSize - totalRollWidth;
+  return trimWidth > 0 ? trimWidth : 0;
+}
+
 export default {
   calculateRollWeight,
   calculateGramWeight,
@@ -389,4 +440,6 @@ export default {
   calculateHopperPPH,
   formatHoursAsTime,
   calculateShutoffTime,
+  calculateTrimScrap,
+  calculateTrimWidth,
 };
