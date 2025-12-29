@@ -7,8 +7,10 @@ import { RangeIndicator } from "../ui/RangeIndicator";
 import type { SpecStatus } from "../../types";
 
 interface TreaterInputs {
-  // Treater machine setting (e.g., 3.8)
-  treaterSetting: number | string;
+  // Treater power inputs
+  wattage: number | string;        // Actual watts displayed on treater
+  lineSpeed: number | string;      // Line speed in FPM
+  filmWidth: number | string;      // Total film width being treated (inches)
   // Order specs for dyne level
   minDyne: number | string;
   maxDyne: number | string;
@@ -19,13 +21,17 @@ interface TreaterInputs {
 
 interface Reading {
   dyneValue: number;
-  treaterSetting: number;
+  wattage: number;
+  lineSpeed: number;
+  wattDensity: number;
   timestamp: Date;
 }
 
 export function TreaterMonitor() {
   const [inputs, setInputs] = useState<TreaterInputs>({
-    treaterSetting: "",
+    wattage: "",
+    lineSpeed: "",
+    filmWidth: "",
     minDyne: 38,
     maxDyne: 44,
     targetDyne: 40,
@@ -42,13 +48,20 @@ export function TreaterMonitor() {
     const dyneValue = typeof inputs.testResult === "number"
       ? inputs.testResult
       : parseFloat(inputs.testResult as string);
-    const treaterSetting = typeof inputs.treaterSetting === "number"
-      ? inputs.treaterSetting
-      : parseFloat(inputs.treaterSetting as string);
+    const wattage = typeof inputs.wattage === "number"
+      ? inputs.wattage
+      : parseFloat(inputs.wattage as string);
+    const lineSpeed = typeof inputs.lineSpeed === "number"
+      ? inputs.lineSpeed
+      : parseFloat(inputs.lineSpeed as string);
+    const filmWidth = typeof inputs.filmWidth === "number"
+      ? inputs.filmWidth
+      : parseFloat(inputs.filmWidth as string);
 
-    if (!isNaN(dyneValue) && !isNaN(treaterSetting)) {
+    if (!isNaN(dyneValue) && !isNaN(wattage) && !isNaN(lineSpeed) && !isNaN(filmWidth) && filmWidth > 0 && lineSpeed > 0) {
+      const wattDensity = wattage / (filmWidth * lineSpeed);
       setReadings((prev) => [
-        { dyneValue, treaterSetting, timestamp: new Date() },
+        { dyneValue, wattage, lineSpeed, wattDensity, timestamp: new Date() },
         ...prev.slice(0, 9), // Keep last 10 readings
       ]);
     }
@@ -56,7 +69,9 @@ export function TreaterMonitor() {
 
   const handleReset = () => {
     setInputs({
-      treaterSetting: "",
+      wattage: "",
+      lineSpeed: "",
+      filmWidth: "",
       minDyne: 38,
       maxDyne: 44,
       targetDyne: 40,
@@ -66,9 +81,15 @@ export function TreaterMonitor() {
   };
 
   const analysis = useMemo(() => {
-    const treaterSetting = typeof inputs.treaterSetting === "number"
-      ? inputs.treaterSetting
-      : parseFloat(inputs.treaterSetting as string);
+    const wattage = typeof inputs.wattage === "number"
+      ? inputs.wattage
+      : parseFloat(inputs.wattage as string);
+    const lineSpeed = typeof inputs.lineSpeed === "number"
+      ? inputs.lineSpeed
+      : parseFloat(inputs.lineSpeed as string);
+    const filmWidth = typeof inputs.filmWidth === "number"
+      ? inputs.filmWidth
+      : parseFloat(inputs.filmWidth as string);
     const testResult = typeof inputs.testResult === "number"
       ? inputs.testResult
       : parseFloat(inputs.testResult as string);
@@ -82,13 +103,17 @@ export function TreaterMonitor() {
       ? inputs.targetDyne
       : parseFloat(inputs.targetDyne as string);
 
-    if (isNaN(treaterSetting) || isNaN(testResult) || isNaN(minDyne) || isNaN(maxDyne) || isNaN(targetDyne)) {
+    if (isNaN(wattage) || isNaN(lineSpeed) || isNaN(filmWidth) || isNaN(testResult) || isNaN(minDyne) || isNaN(maxDyne) || isNaN(targetDyne)) {
       return null;
     }
 
-    if (treaterSetting <= 0) {
+    if (wattage <= 0 || lineSpeed <= 0 || filmWidth <= 0) {
       return null;
     }
+
+    // Calculate Watt Density (watts per inch per FPM)
+    // This is the key metric that determines treatment level
+    const wattDensity = wattage / (filmWidth * lineSpeed);
 
     // Determine status based on test result vs specs
     let status: SpecStatus = "in_spec";
@@ -105,17 +130,20 @@ export function TreaterMonitor() {
     // Calculate dyne deviation from target
     const dyneDeviation = testResult - targetDyne;
 
-    // Calculate the ratio: dyne per treater setting unit
-    // This tells us how much dyne change we get per setting change
-    const dynePerSetting = testResult / treaterSetting;
+    // Calculate the ratio: dyne per watt density unit
+    // This tells us how much dyne change we get per watt density change
+    const dynePerWattDensity = testResult / wattDensity;
 
-    // Calculate the setting adjustment needed to reach target
-    // If test shows 46 dyne at 3.8 setting, and target is 40:
-    // Adjustment = (testResult - targetDyne) / dynePerSetting
-    const settingAdjustment = dyneDeviation / dynePerSetting;
+    // Calculate the watt density adjustment needed to reach target
+    const wattDensityAdjustment = dyneDeviation / dynePerWattDensity;
+    const targetWattDensity = wattDensity - wattDensityAdjustment;
 
-    // New recommended setting
-    const newSetting = treaterSetting - settingAdjustment;
+    // Calculate new wattage needed at current line speed
+    const newWattage = targetWattDensity * filmWidth * lineSpeed;
+    const wattageAdjustment = wattage - newWattage;
+
+    // Calculate what line speed would need to be at current wattage
+    const newLineSpeed = wattage / (targetWattDensity * filmWidth);
 
     // Trend from readings
     let trend: "up" | "down" | "stable" | null = null;
@@ -132,16 +160,21 @@ export function TreaterMonitor() {
     }
 
     return {
-      treaterSetting,
+      wattage,
+      lineSpeed,
+      filmWidth,
+      wattDensity,
       testResult,
       minDyne,
       maxDyne,
       targetDyne,
       status,
       dyneDeviation,
-      dynePerSetting,
-      settingAdjustment,
-      newSetting,
+      dynePerWattDensity,
+      targetWattDensity,
+      newWattage,
+      wattageAdjustment,
+      newLineSpeed,
       needsAdjustment: Math.abs(dyneDeviation) > 0.5,
       adjustDirection: dyneDeviation > 0 ? "down" : "up",
       trend,
@@ -158,24 +191,57 @@ export function TreaterMonitor() {
 
         <CardBody>
           <div className="space-y-6">
-            {/* Current Treater Setting */}
+            {/* Treater Power Inputs */}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-primary">
                 <Zap size={16} />
-                Current Treater Setting
+                Treater Settings
               </h3>
-              <NumberInput
-                label="Treater Power Setting"
-                value={inputs.treaterSetting}
-                onChange={handleInputChange("treaterSetting")}
-                placeholder="3.8"
-                hint="Current dial/display setting on treater"
-              />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <NumberInput
+                  label="Wattage"
+                  value={inputs.wattage}
+                  onChange={handleInputChange("wattage")}
+                  unit="W"
+                  placeholder="3500"
+                  hint="Current watts displayed"
+                />
+                <NumberInput
+                  label="Line Speed"
+                  value={inputs.lineSpeed}
+                  onChange={handleInputChange("lineSpeed")}
+                  unit="FPM"
+                  placeholder="300"
+                  hint="Current line speed"
+                />
+                <NumberInput
+                  label="Film Width"
+                  value={inputs.filmWidth}
+                  onChange={handleInputChange("filmWidth")}
+                  unit="in"
+                  placeholder="48"
+                  hint="Total treated width"
+                />
+              </div>
+              {/* Watt Density Display */}
+              {analysis && (
+                <div className="mt-3 rounded bg-slate-800 dark:bg-slate-900 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">Watt Density:</span>
+                    <span className="text-lg font-bold text-primary">
+                      {(analysis.wattDensity * 1000).toFixed(2)} <span className="text-sm font-normal">mW/in²/FPM</span>
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Key metric: Higher = more treatment
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Order Specs */}
             <div>
-              <h3 className="mb-3 text-sm font-medium text-slate-300">Order Dyne Specifications</h3>
+              <h3 className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-300">Order Dyne Specifications</h3>
               <div className="grid gap-4 sm:grid-cols-3">
                 <NumberInput
                   label="Minimum"
@@ -215,7 +281,7 @@ export function TreaterMonitor() {
                   type="button"
                   onClick={handleAddReading}
                   className="btn-secondary"
-                  disabled={inputs.testResult === "" || inputs.treaterSetting === ""}
+                  disabled={inputs.testResult === "" || inputs.wattage === "" || inputs.lineSpeed === "" || inputs.filmWidth === ""}
                 >
                   Log Reading
                 </button>
@@ -298,44 +364,61 @@ export function TreaterMonitor() {
                             {analysis.adjustDirection === "down" ? (
                               <>
                                 <ArrowDown className="text-blue-400" size={24} />
-                                <span className="text-lg font-bold text-blue-400">TURN DOWN</span>
+                                <span className="text-lg font-bold text-blue-400">REDUCE POWER</span>
                               </>
                             ) : (
                               <>
                                 <ArrowUp className="text-orange-400" size={24} />
-                                <span className="text-lg font-bold text-orange-400">TURN UP</span>
+                                <span className="text-lg font-bold text-orange-400">INCREASE POWER</span>
                               </>
                             )}
                           </div>
                         </div>
 
-                        {/* Amount */}
+                        {/* Wattage Change */}
                         <div className="rounded bg-slate-800 p-3">
-                          <p className="text-xs text-slate-400 mb-1">Adjustment Amount</p>
+                          <p className="text-xs text-slate-400 mb-1">Wattage Change</p>
                           <p className="text-2xl font-bold text-slate-100">
-                            {Math.abs(analysis.settingAdjustment).toFixed(2)}
+                            {analysis.wattageAdjustment > 0 ? "-" : "+"}{Math.abs(analysis.wattageAdjustment).toFixed(0)} W
                           </p>
                         </div>
                       </div>
 
-                      {/* New Setting */}
+                      {/* Option 1: Adjust Wattage */}
                       <div className="mt-3 rounded bg-slate-800 p-3">
+                        <p className="text-xs text-slate-400 mb-2">Option 1: Adjust Wattage (keep speed at {analysis.lineSpeed} FPM)</p>
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-xs text-slate-400 mb-1">Current Setting</p>
-                            <p className="text-xl font-medium text-slate-300">{analysis.treaterSetting.toFixed(1)}</p>
+                            <p className="text-xs text-slate-500 mb-1">Current</p>
+                            <p className="text-xl font-medium text-slate-300">{analysis.wattage.toFixed(0)} W</p>
                           </div>
                           <div className="text-2xl text-slate-500">→</div>
                           <div>
-                            <p className="text-xs text-slate-400 mb-1">New Setting</p>
-                            <p className="text-2xl font-bold text-success">{analysis.newSetting.toFixed(1)}</p>
+                            <p className="text-xs text-slate-500 mb-1">Target</p>
+                            <p className="text-2xl font-bold text-success">{analysis.newWattage.toFixed(0)} W</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Option 2: Adjust Line Speed */}
+                      <div className="mt-3 rounded bg-slate-800 p-3">
+                        <p className="text-xs text-slate-400 mb-2">Option 2: Adjust Line Speed (keep wattage at {analysis.wattage} W)</p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Current</p>
+                            <p className="text-xl font-medium text-slate-300">{analysis.lineSpeed.toFixed(0)} FPM</p>
+                          </div>
+                          <div className="text-2xl text-slate-500">→</div>
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Target</p>
+                            <p className="text-2xl font-bold text-success">{analysis.newLineSpeed.toFixed(0)} FPM</p>
                           </div>
                         </div>
                       </div>
 
                       <p className="mt-3 text-xs text-slate-400">
-                        Based on ratio of {analysis.dynePerSetting.toFixed(1)} dyne per setting unit.
-                        Adjust treater to {analysis.newSetting.toFixed(1)} to achieve target of {analysis.targetDyne} dyne.
+                        Target watt density: {(analysis.targetWattDensity * 1000).toFixed(2)} mW/in²/FPM
+                        (currently {(analysis.wattDensity * 1000).toFixed(2)})
                       </p>
                     </div>
                   </div>
@@ -347,8 +430,7 @@ export function TreaterMonitor() {
                     <div>
                       <p className="font-medium text-success">No Adjustment Needed</p>
                       <p className="text-sm text-slate-400">
-                        Test result of {analysis.testResult} dyne is within target range.
-                        Current setting of {analysis.treaterSetting.toFixed(1)} is good.
+                        Test result of {analysis.testResult} dyne is within target range at {analysis.wattage}W / {analysis.lineSpeed} FPM.
                       </p>
                     </div>
                   </div>
@@ -364,9 +446,9 @@ export function TreaterMonitor() {
                       <span
                         key={index}
                         className="rounded bg-slate-600 px-2 py-1 text-sm text-slate-300"
-                        title={`Setting: ${reading.treaterSetting}`}
+                        title={`${reading.wattage}W @ ${reading.lineSpeed} FPM`}
                       >
-                        {reading.dyneValue.toFixed(0)} dyne @ {reading.treaterSetting}
+                        {reading.dyneValue.toFixed(0)} dyne ({(reading.wattDensity * 1000).toFixed(1)} mW)
                       </span>
                     ))}
                   </div>
@@ -385,37 +467,37 @@ export function TreaterMonitor() {
       </Card>
 
       {/* Quick Reference */}
-      <div className="mt-6 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+      <div className="mt-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
           <Zap size={16} />
           How It Works
         </h3>
-        <div className="text-sm text-slate-400 space-y-2">
-          <p><strong className="text-slate-300">1. Enter current treater setting:</strong> The power dial/display value on your treater</p>
-          <p><strong className="text-slate-300">2. Enter order specs:</strong> Min, target, and max dyne from the job order</p>
-          <p><strong className="text-slate-300">3. Enter test result:</strong> The actual dyne level from your test</p>
-          <div className="pt-2 border-t border-slate-700 mt-3">
-            <p className="font-medium text-slate-300 mb-1">The Result:</p>
+        <div className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+          <p><strong className="text-slate-800 dark:text-slate-300">1. Enter treater settings:</strong> Current wattage, line speed, and film width</p>
+          <p><strong className="text-slate-800 dark:text-slate-300">2. Enter order specs:</strong> Min, target, and max dyne from the job order</p>
+          <p><strong className="text-slate-800 dark:text-slate-300">3. Enter test result:</strong> The actual dyne level from your dyne pen test</p>
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 mt-3">
+            <p className="font-medium text-slate-800 dark:text-slate-300 mb-1">Why Wattage + Line Speed Matter:</p>
             <p className="text-slate-500">
-              The calculator determines the <strong className="text-warning">ratio between your treater setting and dyne output</strong>,
-              then calculates exactly how much to adjust the treater to hit your target.
+              Treatment level depends on <strong className="text-warning">watt density</strong> (watts per inch per FPM).
+              Running faster needs more watts. The calculator shows you whether to adjust power OR speed to hit your target.
             </p>
           </div>
         </div>
       </div>
 
       {/* Example */}
-      <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-        <h3 className="mb-2 text-sm font-medium text-slate-300">Example</h3>
-        <div className="text-sm text-slate-400 space-y-1">
-          <p>Treater setting: <strong className="text-slate-300">3.8</strong></p>
-          <p>Order specs: <strong className="text-slate-300">38/44/40</strong> (min/max/target)</p>
-          <p>Test result: <strong className="text-slate-300">46 dyne</strong></p>
+      <div className="mt-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4">
+        <h3 className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">Example</h3>
+        <div className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+          <p>Wattage: <strong className="text-slate-800 dark:text-slate-300">4000 W</strong> | Line Speed: <strong className="text-slate-800 dark:text-slate-300">300 FPM</strong> | Width: <strong className="text-slate-800 dark:text-slate-300">48 in</strong></p>
+          <p>Order specs: <strong className="text-slate-800 dark:text-slate-300">38/44/40</strong> (min/max/target dyne)</p>
+          <p>Test result: <strong className="text-slate-800 dark:text-slate-300">46 dyne</strong> (too high)</p>
           <p className="pt-2 text-slate-500">
-            → Ratio: 46 ÷ 3.8 = 12.1 dyne per setting<br />
-            → Need to reduce by 6 dyne (46 - 40)<br />
-            → Adjustment: 6 ÷ 12.1 = 0.5<br />
-            → <strong className="text-success">Turn treater DOWN to 3.3</strong>
+            → Current watt density: 4000 ÷ (48 × 300) = 0.278 mW/in²/FPM<br />
+            → Need to reduce dyne by 6 (46 → 40)<br />
+            → <strong className="text-success">Option 1:</strong> Reduce to ~3480 W at same speed<br />
+            → <strong className="text-success">Option 2:</strong> Increase to ~345 FPM at same watts
           </p>
         </div>
       </div>
